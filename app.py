@@ -3,6 +3,7 @@ import pandas as pd
 import tempfile
 import os
 import re
+import io
 from email.utils import parseaddr
 from email.header import decode_header
 import olefile
@@ -395,11 +396,16 @@ if uploaded_files:
     st.subheader("Analyse-Ergebnisse")
     st.dataframe(df)
 
+    # Erzeuge echtes XLSX im Speicher und liefere es als Download
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Analysis")
+    buffer.seek(0)
     st.download_button(
         "Excel herunterladen",
-        df.to_xlsx(index=False).encode("utf-8"),
-        "header_analysis.csv",
-        "text/csv"
+        buffer.getvalue(),
+        "HeaderDecoder_Export.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 else:
     st.info("Bitte MSG- oder EML-Dateien hochladen…")
