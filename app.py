@@ -401,6 +401,15 @@ if uploaded_files:
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Analysis")
     buffer.seek(0)
+    # Legacy-labeled button kept for compatibility: liefert jetzt XLSX
+    st.download_button(
+        "Export CSV",
+        buffer.getvalue(),
+        "HeaderDecoder_Export.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # Klar benannte Excel-Download-Option
     st.download_button(
         "Excel herunterladen",
         buffer.getvalue(),
