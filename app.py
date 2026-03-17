@@ -94,7 +94,7 @@ def to_excel(df):
 
 # ---------------------------------------------------------
 
-st.set_page_config(page_title="MSG/EML Header Analyzer (final)", layout="wide")
+st.set_page_config(page_title="MSG/EML Header Analyzer, ESP & Excel Download", layout="wide")
 
 st.title("MSG / EML Header Analyzer, ESP & Excel Download")
 
