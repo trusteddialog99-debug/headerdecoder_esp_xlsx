@@ -82,7 +82,6 @@ def to_excel(df):
 
         worksheet = writer.sheets["Analyse"]
 
-        # automatische Spaltenbreite
         for i, col in enumerate(df.columns):
             max_len = max(
                 df[col].astype(str).map(len).max(),
@@ -94,9 +93,10 @@ def to_excel(df):
 
 # ---------------------------------------------------------
 
-st.set_page_config(page_title="MSG/EML Header Analyzer, ESP & Excel Download", layout="wide")
+st.set_page_config(page_title="MSG/EML Header Analyzer", layout="wide")
+st.title("MSG / EML Header Analyzer")
 
-st.title("MSG / EML Header Analyzer, ESP & Excel Download")
+# ---------------------------------------------------------
 
 def decode_mime_words(s):
     parts = decode_header(s)
@@ -135,34 +135,38 @@ def extract_from_msg(path: str) -> str | None:
             except Exception:
                 continue
 
-    for try_name in ("__substg1.0_007D001F", "__substg1.0_007D001E"):
-        if ole.exists(try_name):
-            try:
-                data = ole.openstream(try_name).read()
-                candidates.insert(0, (try_name, data))
-            except Exception:
-                pass
-
     ole.close()
 
-    if not candidates:
-        return None
-
     for name, data in candidates:
-        if "001F" in name.upper():
-            try:
-                return data.decode("utf-16-le", errors="ignore")
-            except:
-                pass
-
-    for name, data in candidates:
-        for enc in ("utf-8", "latin1", "cp1252"):
+        for enc in ("utf-16-le", "utf-8", "latin1", "cp1252"):
             try:
                 return data.decode(enc, errors="ignore")
             except:
                 continue
 
     return None
+
+# ---------------------------------------------------------
+# 🔥 FIX: RETURN-PATH EXTRACTION
+# ---------------------------------------------------------
+
+def extract_return_path(normalized_headers: str) -> str:
+    patterns = [
+        r"(?mi)^return-path:\s*<?([^>\s]+)",
+        r"(?mi)^envelope-from:\s*<?([^>\s]+)",
+        r"(?mi)^x-envelope-from:\s*<?([^>\s]+)"
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, normalized_headers)
+        if match:
+            addr = match.group(1)
+            if "@" in addr:
+                return addr.split("@")[1].lower()
+
+    return "-"
+
+# ---------------------------------------------------------
 
 def parse_headers(headers: str) -> dict:
     result = {
@@ -175,17 +179,21 @@ def parse_headers(headers: str) -> dict:
         "email_versandtool": "Unbekannt",
         "from_domain": "-",
         "returnpath_domain": "-",
-        "dkim_auth_result": "nicht vorhanden",
-        "dkim_alignment": "kein Alignment",
         "headers_found": "yes" if headers else "no"
     }
 
     if not headers:
         return result
 
+    # 👉 wichtig für folded headers
     normalized = re.sub(r"(\r?\n)[ \t]+", " ", headers)
 
-    dkim_blocks = re.findall(r"(?mi)^dkim-signature:\s*(.+?)(?=\r?\n[^ \t]|$)", normalized, flags=re.S)
+    # DKIM
+    dkim_blocks = re.findall(
+        r"(?mi)^dkim-signature:\s*(.+?)(?=\r?\n[^ \t]|$)",
+        normalized,
+        flags=re.S
+    )
 
     def extract(block):
         d = re.search(r"\bd=([^;\s]+)", block, flags=re.I)
@@ -202,11 +210,15 @@ def parse_headers(headers: str) -> dict:
         if len(dkim_blocks) > 1:
             result["dkim_domain_2"], result["dkim_selector_2"], result["dkim_itag_2"] = extract(dkim_blocks[1])
 
+    # FROM
     fm = re.search(r"(?mi)^from:\s*(.+)$", normalized)
     if fm:
         _, addr = parseaddr(decode_mime_words(fm.group(1)))
         if "@" in addr:
             result["from_domain"] = addr.split("@")[1].lower()
+
+    # 🔥 RETURN PATH FIX
+    result["returnpath_domain"] = extract_return_path(normalized)
 
     return result
 
@@ -237,11 +249,8 @@ if uploaded_files:
     df = pd.DataFrame(results)
 
     st.subheader("Analyse-Ergebnisse")
-
-    # ✅ EDITOR statt dataframe → kopierbar
     st.data_editor(df)
 
-    # ✅ Excel Download
     excel_data = to_excel(df)
 
     st.download_button(
